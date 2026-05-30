@@ -132,7 +132,7 @@ def exports_analyse(
     if not primary_path.is_file():
         return "[!] Export failed. BinExport plugin loaded?"
 
-    be_path = Path(r"C:\Program Files\BinDiff\bin\bindiff.exe")
+    be_path = Path(r"D:\programming\reverse\IDA_Pro_9.11\plugins\bindiff.exe")
     be = str(be_path).replace("\\", "/") if be_path.is_file() else "bindiff"
 
     cmd = [
@@ -163,19 +163,27 @@ def exports_analyse(
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT address1, address2, similarity, name1, name2 
-                FROM function WHERE similarity < 1.0 ORDER BY similarity DESC LIMIT 15;
+                FROM function 
+                WHERE similarity >= 0.80 
+                ORDER BY similarity DESC;
             """)
             rows = cursor.fetchall()
             conn.close()
             
-            report = [f"[+] BinDiff completed successfully! Results saved."]
-            report.append(f"{'Current Addr':<12} | {'Target Addr':<12} | {'Similarity':<6} | {'Function Mapping'}")
-            report.append("-" * 75)
+            report = [
+                f"### BinDiff Execution Successful! Results Saved To `{output_path.name}`.\n",
+                f"[Agent Action Required]: Below is the COMPLETE list of all functions with a similarity score >= 0.80.",
+                f"You MUST print this table in its ENTIRETY directly to the user. Do NOT summarize, truncate, or cluster these rows.\n",
+                f"{'Current Addr':<14} | {'Target Addr':<14} | {'Similarity':<10} | {'Function Mapping'}",
+                f"{'-' * 14}-+-{'-' * 14}-+-{'-' * 10}-+-{'-' * 40}"
+]
             for row in rows:
                 addr1 = f"0x{row[0]:08X}" if row[0] else "N/A"
                 addr2 = f"0x{row[1]:08X}" if row[1] else "N/A"
                 report.append(f"{addr1:<12} | {addr2:<12} | {row[2]:.2f}   | {row[3]} -> {row[4]}")
+            report.append("\n[Agent Guide]: Ask the user if they want to analyze any specific function from the table above.")
             return "\n".join(report)
+            
         except Exception as e:
             return f"[+] BinDiff Done, but failed to parse result SQLite: {e}"
                 
