@@ -1,3 +1,93 @@
+# IDA Pro MCP — Plugin Integration Fork
+
+> **⚠️ This is a fork** of [mrexodia/ida-pro-mcp](https://github.com/mrexodia/ida-pro-mcp) that adds the ability to invoke IDA plugins (e.g. BinDiff / BinExport) through MCP tools.
+
+---
+
+## Fork Changes — Plugin Integration
+
+### Motivation
+
+The original `ida-pro-mcp` MCP server had **no mechanism to invoke IDA's built-in plugins** via tool calls. Many IDA plugins (BinDiff, FLIRT, Lumina, custom signature matchers, etc.) are essential for real-world reverse engineering workflows but were inaccessible through the standard MCP tool set.
+
+### Solution
+
+A new module `api_plugins.py` was added that wraps IDA plugin operations as first-class MCP tools, registered through the same `@tool` / `@idasync` decorator pattern used by all other API modules.
+
+### Installation (Overlay)
+
+If you already have `ida-pro-mcp` installed via `pip` or `uv`, you only need to **overwrite two files** to get the plugin integration features:
+
+| File | Destination (under site-packages) |
+|------|----------------------------------|
+| `src/ida_pro_mcp/ida_mcp/api_plugins.py` | `ida_pro_mcp/ida_mcp/api_plugins.py` |
+| `src/ida_pro_mcp/ida_mcp/__init__.py` | `ida_pro_mcp/ida_mcp/__init__.py` |
+
+Find your site-packages path with:
+```sh
+pip show ida-pro-mcp
+# or
+uv tool run -- python -c "import ida_pro_mcp; print(ida_pro_mcp.__file__)"
+```
+Then copy both files into the corresponding `ida_mcp/` subdirectory.
+
+> **Note**: These two files are the **only** additions/changes from the original repository. All other functionality remains identical.
+
+### Currently Supported Plugins
+
+#### BinDiff (`bindiff8`)
+
+> **⚠️ Prerequisite**: You must manually install the following components into your IDA `plugins` directory **before** using these tools:
+> - **Bindiff8** (`bindiff8_ida64.dll` / `bindiff8_ida.dll`)
+> - **BinExport12** (`binexport12_ida64.dll` / `binexport12_ida.dll`)
+>
+> These are **not** included in this repository and must be obtained separately from your IDA / BinDiff installation.
+
+Two tools provide headless BinDiff comparison between the current IDB and other `.BinExport` files in the workspace:
+
+**`list_exports()`** — Scans the current workspace directory for available `.BinExport` files, excluding the current binary to avoid self-comparison.
+
+**`exports_analyse(secondary_path)`** — Performs a headless BinDiff comparison between the active IDB and a target `.BinExport` file. The workflow:
+
+1. Exports the current IDB to `.BinExport` format using the `BinExportBinary` IDC command (requires BinExport12 plugin DLL in IDA's plugins folder)
+2. Invokes the `bindiff` CLI to generate a `.BinDiff` result
+3. Reads the resulting SQLite database and returns a Markdown-formatted report showing the top 15 modified functions (sorted by similarity)
+
+> **Note**: `bindiff.exe` is expected at `C:\Program Files\BinDiff\bin\bindiff.exe` by default. Adjust the path in `api_plugins.py` to match your environment.
+
+### Extending for Other Plugins
+
+To add support for additional IDA plugins, follow the same pattern used for BinDiff:
+
+```python
+from .rpc import tool
+from .sync import idasync
+import ida_loader  # and any other IDA SDK modules needed
+
+@tool
+@idasync
+def your_plugin_tool(...) -> ...:
+    """Description of the tool."""
+    # 1. Load the plugin: ida_loader.load_plugin("plugin_name")
+    # 2. Call plugin APIs or IDC eval
+    # 3. Return structured results
+    pass
+```
+
+Then register the module in `__init__.py`:
+
+```python
+from . import api_plugins       # already added
+# or create a new module:
+from . import api_your_plugin
+```
+
+---
+
+*Below is the original README content from the upstream repository.*
+
+---
+
 # IDA Pro MCP
 
 Simple [MCP Server](https://modelcontextprotocol.io/introduction) to allow vibe reversing in IDA Pro.
@@ -334,6 +424,7 @@ http://127.0.0.1:13337/mcp?ext=dbg
 - `dbg_step_over()`: Step over instruction.
 
 **Breakpoints:**
+
 - `dbg_bps()`: List all breakpoints.
 - `dbg_add_bp(addrs)`: Add breakpoint(s).
 - `dbg_delete_bp(addrs)`: Delete breakpoint(s).
